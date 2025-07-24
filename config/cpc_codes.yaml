@@ -1,0 +1,262 @@
+# Patent Classification Configuration
+# This file can be customized for any technology domain by defining CPC codes and keywords
+# Users can add/edit domains, CPC codes, and keywords as needed
+
+
+domains:
+  # Example Domain 1: Quantum Computing
+  quantum_computing:
+    description: "Information processing based on quantum-mechanical phenomena"
+    cpc_codes:
+      - code: "G06N10/20"
+        description: "Models of quantum computing, e.g. quantum circuits or universal quantum computers"
+        keywords:
+          - "quantum circuit"
+          - "quantum gate"
+          - "quantum register"
+          - "quantum random access memory"
+          - "adiabatic quantum computation"
+          - "topological quantum computing"
+          - "quantum simulation"
+          - "quantum cellular automata"
+          - "quantum Turing machine"
+          - "qudit"
+          - "qutrit"
+          - "Clifford gate"
+          - "controlled gate"
+          - "CNOT"
+          - "Hadamard gate"
+          - "Pauli gate"
+          - "SWAP gate"
+          - "T gate"
+          - "Toffoli gate"
+          - "Deutsch gate"
+          - "Ising gate"
+          - "phase shift gate"
+      
+      - code: "G06N10/40"
+        description: "Physical realisations or architectures of quantum processors or components for manipulating qubits"
+        keywords:
+          - "superconducting quantum computer"
+          - "trapped ion quantum computer"
+          - "trapped atom quantum computer"
+          - "optical lattice"
+          - "spin-based quantum computer"
+          - "quantum dot"
+          - "NMR quantum computer"
+          - "nitrogen-vacancy center"
+          - "fullerene"
+          - "Kane quantum computer"
+          - "Loss-DiVincenzo"
+          - "linear optical quantum computer"
+          - "qubit coupling"
+          - "qubit control"
+          - "qubit readout"
+          - "quantum processor"
+          - "quantum bus"
+          - "quantum memory"
+          - "quantum network"
+          - "quantum repeater"
+          - "charge qubit"
+          - "flux qubit"
+          - "phase qubit"
+          - "Transmon"
+          - "Xmon"
+          - "Paul ion trap"
+      
+      - code: "G06N10/60"
+        description: "Quantum algorithms, e.g. based on quantum optimisation, quantum Fourier or Hadamard transforms"
+        keywords:
+          - "Grover algorithm"
+          - "Shor algorithm"
+          - "Simon algorithm"
+          - "Deutsch-Josza algorithm"
+          - "quantum phase estimation"
+          - "quantum eigenvalue estimation"
+          - "quantum annealing"
+          - "Ising machine"
+          - "variational quantum eigensolver"
+          - "VQE"
+          - "quantum alternating operator ansatz"
+          - "QAOA"
+          - "quantum approximate optimization"
+          - "quantum machine learning"
+          - "quantum walk"
+          - "amplitude amplification"
+          - "Fourier transform"
+          - "Hadamard transform"
+          - "hybrid quantum-classical"
+      
+      - code: "G06N10/70"
+        description: "Quantum error correction, detection or prevention, e.g. surface codes or magic state distillation"
+        keywords:
+          - "quantum error correction"
+          - "stabilizer code"
+          - "bit flip code"
+          - "sign flip code"
+          - "Shor code"
+          - "surface code"
+          - "planar code"
+          - "toric code"
+          - "topological code"
+          - "magic state distillation"
+          - "fault-tolerant quantum"
+          - "quantum fidelity"
+          - "quantum volume"
+          - "quantum purity"
+          - "randomized benchmarking"
+          - "cross-entropy benchmarking"
+          - "random circuit sampling"
+      
+      - code: "G06N10/80"
+        description: "Quantum programming, e.g. interfaces, languages or software-development kits"
+        keywords:
+          - "quantum programming"
+          - "quantum instruction set"
+          - "quantum software development kit"
+          - "quantum programming language"
+          - "Quil"
+          - "Qiskit"
+          - "QCL"
+          - "cloud-based quantum computing"
+          - "IBM Q Experience"
+          - "Quantum Inspire"
+          - "Azure Quantum"
+          - "Amazon Braket"
+          - "Rigetti Quantum Cloud"
+          - "Quantum Playground"
+          - "quantum simulator"
+          - "quantum compiler"
+    
+    synonyms:
+      - "quantum computer"
+      - "qubit"
+      - "quantum bit"
+      - "superconducting bit"
+      - "Josephson junction"
+      - "SQUID"
+      - "quantum information processing"
+      - "quantum computation"
+      - "quantum processor"
+      - "quantum device"
+    
+    application_domains:
+      - "quantum sensing"
+      - "quantum finance"
+      - "quantum optimization"
+      - "drug discovery"
+      - "quantum bioinformatics"
+      - "quantum material design"
+      - "quantum chemistry"
+      - "quantum AI"
+      - "quantum machine learning"
+
+  # Example Domain 2: Quantum Safe Communications
+  quantum_safe_communications:
+    description: "Secure communications using quantum technologies and post-quantum cryptography"
+    cpc_codes:
+      - code: "H04L9/0852"
+        description: "Quantum cryptography"
+        keywords:
+          - "quantum key distribution"
+          - "QKD"
+          - "BB84 protocol"
+          - "SARG04 protocol"
+          - "E91 protocol"
+          - "continuous variable QKD"
+          - "CV-QKD"
+          - "quantum cryptography"
+          - "quantum key establishment"
+          - "quantum secure communication"
+      
+      - code: "H04B10/70"
+        description: "Photonic quantum communication"
+        keywords:
+          - "quantum communication"
+          - "quantum channel"
+          - "photonic quantum"
+          - "free space quantum"
+          - "fiber quantum"
+          - "satellite quantum"
+          - "quantum entanglement distribution"
+          - "quantum teleportation"
+          - "quantum state transmission"
+      
+      - code: "H04L9/30"
+        description: "Public key cryptography (including post-quantum variants)"
+        keywords:
+          - "post-quantum cryptography"
+          - "lattice-based cryptography"
+          - "hash-based cryptography"
+          - "code-based cryptography"
+          - "multivariate cryptography"
+          - "isogeny-based cryptography"
+          - "quantum-resistant"
+          - "quantum-safe"
+          - "NIST post-quantum"
+          - "Kyber"
+          - "Dilithium"
+          - "FALCON"
+          - "SPHINCS+"
+      
+      - code: "H04L9/08"
+        description: "Key distribution or management"
+        keywords:
+          - "quantum key management"
+          - "key distribution"
+          - "key rotation"
+          - "key storage"
+          - "secure key exchange"
+          - "quantum-safe key management"
+    
+    synonyms:
+      - "quantum cryptography"
+      - "quantum security"
+      - "quantum-safe"
+      - "quantum-resistant"
+      - "post-quantum"
+      - "quantum key distribution"
+      - "QKD"
+      - "quantum communication"
+      - "quantum network security"
+    
+    application_domains:
+      - "banking quantum security"
+      - "financial quantum"
+      - "government quantum"
+      - "military quantum communication"
+      - "enterprise quantum security"
+      - "data center quantum"
+      - "cloud quantum security"
+      - "5G quantum security"
+      - "IoT quantum security"
+
+# Global settings that apply to all domains
+global_settings:
+  # Terms that often create false positives when they appear alone
+  noise_terms:
+    exclude_when_alone:
+      - "classical computing"
+      - "traditional encryption"
+      - "conventional cryptography"
+      - "digital signature"  # unless explicitly domain-related
+      - "blockchain"  # unless domain-related
+      - "artificial intelligence"  # unless domain-related AI
+      - "machine learning"  # unless domain-related ML
+    
+    # These terms require domain-specific context to be considered relevant
+    require_domain_context:
+      - "algorithm"
+      - "optimization"
+      - "simulation"
+      - "cryptography"
+      - "security"
+      - "communication"
+      - "computing"
+      - "processing"
+
+  # Minimum abstract length to ensure substantial content
+  min_abstract_length: 100
+  
+  # Default batch size for BigQuery processing
+  default_batch_size: 1000
