@@ -2,9 +2,27 @@
 # This file can be customized for any technology domain by defining CPC codes and keywords
 # Users can add/edit domains, CPC codes, and keywords as needed
 
+# [DO NOT EDIT] User inputs from app
+user_inputs:
+  companies:
+    - "IBM"
+    - "Google"
+    - "Microsoft"
+    - "Amazon"
+    - "Huawei"
 
+  date_range:
+    start_year: 2020  # User enters just year
+    end_year: 2025    # Auto-converted to: 2020-01-01 to 2025-12-31
+
+  processing_options:
+    save_by_company: true
+    max_cost_per_batch: 5.0
+    output_directory: "data/raw/"
+
+# [EDIT THIS] Define tech domains and CPC codes here
 domains:
-  # Example Domain 1: Quantum Computing
+  # Domain 1
   quantum_computing:
     description: "Information processing based on quantum-mechanical phenomena"
     cpc_codes:
@@ -128,6 +146,7 @@ domains:
           - "quantum simulator"
           - "quantum compiler"
     
+    # [OPTIONAL] Edit this section to add more keywords; no CPC codes here
     synonyms:
       - "quantum computer"
       - "qubit"
@@ -151,7 +170,7 @@ domains:
       - "quantum AI"
       - "quantum machine learning"
 
-  # Example Domain 2: Quantum Safe Communications
+  # Domain 2
   quantum_safe_communications:
     description: "Secure communications using quantum technologies and post-quantum cryptography"
     cpc_codes:
@@ -209,6 +228,7 @@ domains:
           - "secure key exchange"
           - "quantum-safe key management"
     
+    # [OPTIONAL] Edit this section to add more keywords; no CPC codes here
     synonyms:
       - "quantum cryptography"
       - "quantum security"
