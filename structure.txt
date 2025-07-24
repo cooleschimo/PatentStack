@@ -1,0 +1,32 @@
+patent-classifier/
+├── src/
+│   ├── data/
+│   │   ├── bigquery_client.py
+│   │   ├── patent_scraper.py
+│   │   └── data_processor.py
+│   ├── database/
+│   │   ├── models.py
+│   │   ├── database.py
+│   │   └── migrations/
+│   ├── ml/
+│   │   ├── feature_extraction.py
+│   │   ├── classifier.py
+│   │   ├── dual_domain_classifier.py
+│   │   └── evaluation.py
+│   ├── api/
+│   │   ├── main.py
+│   │   ├── routes/
+│   │   └── schemas/
+│   ├── analytics/
+│   │   └── quantum_analytics.py
+│   └── frontend/
+│       └── quantum_dashboard.py
+├── notebooks/
+│   ├── 01_data_exploration.ipynb
+│   ├── 02_model_development.ipynb
+│   └── 03_evaluation_analysis.ipynb
+├── data/
+│   ├── raw/
+│   ├── processed/
+│   └── models/
+└── docs/
