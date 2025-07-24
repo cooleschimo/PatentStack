@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 """
-# BigQuery Patent Data Extractor #
+# Patent Data Fetcher #
 Reads configuration from YAML files and pulls patent data for specified companies
 across any technology domains defined in the configuration.
+- Uses USPTO API for US patents (FREE, no limits)
+- Uses BigQuery for international patents (limits apply)
 """
-import os, sys, argparse, yaml, logging
+import os, sys, argparse, yaml, logging, requests, time, json
 from pathlib import Path
 from datetime import datetime, timedelta
-import re
-import time
 import pandas as pd
-
 from typing import Any
 
-##### Set up #####
+### Set up #####################################################################
 # Google Cloud BigQuery client setup
 try: 
     from google.cloud import bigquery
@@ -33,19 +32,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-##### CPC Code Configuration Parser #####
-class CPCConfigParser:
+### CPC Code Configuration Parser ##############################################
+class CPCParser:
     """
     Loads and parses CPC code classification configuration from YAML files.
     """
     config_path: Path
     config: dict[str, Any]
     domains: list[str]
+    global_settings: dict[str, Any]
 
     def __init__(self, config_path: str = "config/cpc_codes.yaml"):
         self.config_path = Path(config_path)
         self.config = self._load_config()
         self.domains = self.get_domains()
+        self.global_settings = self.get_global_settings()
 
     def _load_config(self) -> dict[str, Any]:
         """
@@ -104,17 +105,13 @@ class CPCConfigParser:
 
         return cpc_codes
 
-            
+    def get_global_settings(self) -> dict[str, Any]:
+        """Get global configuration settings."""
+        global_settings: dict[str, Any] = self.config.get('global_settings', {})
+        return global_settings
 
-
-
- 
-
-
-
-
-##### BigQuery Patent Fetcher #####
-class QuantumPatentFetcher:
+##### BigQuery Patent Fetcher ##################################################
+class PatentFetcher:
     pass
   
 
