@@ -118,9 +118,9 @@ class USPTOPatentPuller:
     Handles US patent data extraction using PatentsView API (official USPTO).
     """
     
-    def __init__(self, cpc_parser: CPCParser, api_key = API_KEY):
+    def __init__(self, cpc_parser: CPCParser):
         self.cpc_parser = cpc_parser
-        self.api_key: str = api_key
+        self.api_key: str = self._get_api_key()
         
         # PatentsView API settings
         self.base_url: str = "https://search.patentsview.org/api/v1"
@@ -130,6 +130,22 @@ class USPTOPatentPuller:
             'X-Api-Key': self.api_key,
             'Content-Type': 'application/json'
         }
+
+    def _get_api_key(self) -> str:
+        """
+        Get API key from environment variable or configuration.
+        """
+        api_key: str | None = os.getenv('PATENTSVIEW_API_KEY')
+        if api_key:
+            return api_key
+       
+        logger.error("PatentsView API key not found in environment variables.\n")
+        raise ValueError("
+            "\nRequired setup:\n"
+            "Create a .env file in your project root with:\n"
+            "PATENTSVIEW_API_KEY=your_actual_api_key_here\n"
+            "\nGet API key from: https://www.patentsview.org/api/keyrequest"
+        )
         
     def _build_search_query(self, companies: list[str], domains: list[str], 
                             start_date: str, end_date: str) -> dict[str, Any]:
@@ -148,6 +164,7 @@ class USPTOPatentPuller:
         # list of 1) company conditions, 2) cpc conditions 3) date conditions
         query_conditions: list[dict[str, Any]] = [] 
 
+        # 1) Company conditions
         if companies:
             company_conditions: list[dict[str, Any]] = []
             for company in companies:
@@ -157,6 +174,59 @@ class USPTOPatentPuller:
                     }
                 })
 
-                last try ah
+            if len(company_conditions) == 1:
+                query_conditions.append(company_conditions[0])
+            else:
+                query_conditions.append({"_or": company_conditions})
 
+        # 2) CPC conditions
+        if all_cpc_codes:
+            cpc_conditions: list[dict[str, Any]] = []
+            for code in all_cpc_codes:
+                # Use the correct CPC field name from PatentsView
+                cpc_conditions.append({
+                    "cpcs.cpc_subclass_id": code
+                })
+            
+            if len(cpc_conditions) == 1:
+                query_conditions.append(cpc_conditions[0])
+            else:
+                query_conditions.append({"_or": cpc_conditions})
 
+        # 3) Date conditions
+        if start_date and end_date:
+            query_conditions.extend([
+                {"_gte": {"patent_date": start_date}},
+                {"_lte": {"patent_date": end_date}}
+            ])
+
+        # Combine all conditions
+        query = {"_and": query_conditions}
+
+        # fields to return
+        fields: list[str] = [
+            "patent_id",
+            "patent_number", 
+            "patent_title",
+            "patent_abstract",
+            "patent_date",           
+            "patent_type",           
+            
+            "assignees.assignee_organization", 
+            "assignees.assignee_location_city",      
+            "assignees.assignee_location_state",     
+            "assignees.assignee_location_country",
+        
+    
+            "cpcs.cpc_subclass_id",                
+            "cpcs.cpc_group_id",                   
+            "cpcs.cpc_subgroup_id",               
+            
+            "inventors.inventor_name_first",         
+            "inventors.inventor_name_last",         
+    
+            "patent_num_times_cited_by_us_patents",  
+
+        ]
+        
+        
