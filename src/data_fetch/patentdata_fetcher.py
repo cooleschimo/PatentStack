@@ -40,12 +40,14 @@ class CPCParser:
     config_path: Path
     config: dict[str, Any]
     domains: list[str]
+    cpc_codes_dict: dict[str, list[str]]
     global_settings: dict[str, Any]
 
     def __init__(self, config_path: str = "config/cpc_codes.yaml"):
         self.config_path = Path(config_path)
         self.config = self._load_config()
         self.domains = self.get_domains()
+        self.cpc_codes_dict = self.get_cpc_codes()
         self.global_settings = self.get_global_settings()
 
     def _load_config(self) -> dict[str, Any]:
@@ -94,24 +96,65 @@ class CPCParser:
             raise ValueError(f"Invalid domains: {invalid_domains}. Available: {self.domains}")
 
         # dict of domain to list of CPC codes under that domain
-        cpc_codes: dict[str, list[str]] = {}  
+        cpc_codes_dict: dict[str, list[str]] = {}  
         for dom in domains_to_process:
             # get value (dict of cpc codes) from config dict corresponding to 
             # the key of the dom, then get value (list of cpc codes) from that 
             # dict with key 'cpc_codes'
             cpc_list: list[dict[str, Any]] = self.config['domains'][dom].get('cpc_codes', [])
             codes: list[str] = [cpc['code'] for cpc in cpc_list]
-            cpc_codes[dom] = codes
+            cpc_codes_dict[dom] = codes
 
-        return cpc_codes
+        return cpc_codes_dict
 
     def get_global_settings(self) -> dict[str, Any]:
         """Get global configuration settings."""
         global_settings: dict[str, Any] = self.config.get('global_settings', {})
         return global_settings
 
-##### BigQuery Patent Fetcher ##################################################
-class PatentFetcher:
-    pass
-  
+##### USPTO Api Patent Puller ##################################################
+class USPTOPatentPuller:
+    """
+    Handles US patent data extraction using PatentsView API (official USPTO).
+    """
+    
+    def __init__(self, cpc_parser: CPCParser, api_key = API_KEY):
+        self.cpc_parser = cpc_parser
+        self.api_key: str = api_key
+        
+        # PatentsView API settings
+        self.base_url: str = "https://search.patentsview.org/api/v1"
+        self.patents_endpoint: str = f"{self.base_url}/patent/"
+        self.rate_limit_delay: float = 1.4 # rate limit: 45 requests/minute = 0.75 requests/second
+        self.headers: dict[str, str] = {
+            'X-Api-Key': self.api_key,
+            'Content-Type': 'application/json'
+        }
+        
+    def _build_search_query(self, companies: list[str], domains: list[str], 
+                            start_date: str, end_date: str) -> dict[str, Any]:
+        """
+        Build PatentsView API search query using format from "documentation link".
+        """
+
+        # get cpc codes #
+        cpc_codes_dict: dict[str, list[str]] = self.cpc_parser.cpc_codes_dict
+        all_cpc_codes: list[str] = []
+        for dom in domains:
+            if dom in cpc_codes_dict:
+                all_cpc_codes.extend(cpc_codes_dict[dom])
+
+        # build query #
+        # list of 1) company conditions, 2) cpc conditions 3) date conditions
+        query_conditions: list[dict[str, Any]] = [] 
+
+        if companies:
+            company_conditions: list[dict[str, Any]] = []
+            for company in companies:
+                company_conditions.append({
+                    "_text_any": {
+                        "assignees.assignee_organization": company
+                    }
+                })
+
 

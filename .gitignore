@@ -136,6 +136,13 @@ ENV/
 env.bak/
 venv.bak/
 
+# Data and logs
+data/raw/
+data/processed/
+*.log
+*.csv
+query_*.sql
+
 # Spyder project settings
 .spyderproject
 .spyproject
