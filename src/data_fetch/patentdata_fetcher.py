@@ -229,7 +229,148 @@ class USPTOPatentPuller:
 
         ]
         
+        # options
+        options: dict[str, Any] = {
+        "size": 100,
+        "exclude_withdrawn": True  # only granted patents
+        }
 
+        return {
+            "q": query,
+            "f": fields,
+            "o": options
+        }
 
-
+    def make_api_request(self, query: dict[str, Any]) -> 
+        """
+        Make rate-limited request to PatentsView API.
+        """
+        response = None
+        try:
+            time.sleep(self.rate_limit_delay)
         
+            response = requests.post(
+                self.patents_endpoint,
+                json=query,
+                headers=self.headers,
+                timeout=30
+            )
+
+            # [response status code checks] - rate or auth problems
+            if response.status_code == 429:
+                retry_after: int = int(response.headers.get('Retry-After', 60))
+                logger.warning(f"Rate limit exceeded. Retrying after {retry_after} seconds.")
+                time.sleep(retry_after)
+                response = requests.post(
+                    self.patents_endpoint,
+                    json=query,
+                    headers=self.headers
+                    )
+            elif response.status_code == 403:
+                logger.error("API authentication failed, check your API key.")
+                raise ValueError("Invalid API key.")
+        
+            response.raise_for_status()
+
+            return response.json()
+        
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request failed: {e}")
+            if hasattr(e, 'response') and e.response:
+                logger.error(f"Response status:{e.response.status_code}")
+                logger.error(f"Response text: {e.response.text}")
+
+                if e.response.status_code == 400:
+                    logger.error("Bad request, check query format")
+                elif e.response.status_code == 403:
+                    logger.error("Authentication failed, check your API key")
+                elif e.response.status_code == 404:
+                    logger.error("Endpoint not found, check URL")
+
+            raise
+        
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse API response: {e}")
+            if response is not None and hasattr(response, "text"):
+                logger.error(f"Response text: {response.text[:500]}")
+            else:
+                logger.error("No response text available.")
+            raise
+
+        def pull_us_patents(self, companies:list[str], domains: list[str],
+                            start_date: str, end_date: str, 
+                            max_results: int | None = None) -> pd.Dataframe:
+
+            """
+            Pull USPTO US patents for specified companies and domains from 
+            PatentsView API.
+            """
+            logger.info(f"Pulling US patents from USPTO API")
+            logger.info(f"Companies: {companies}")
+            logger.info(f"Domains: {domains}")
+            logger.info(f"Date range: {start_date} to {end_date}")
+
+            base_query: dict[str, Any] = self._build_search_query(
+                companies=companies,
+                domains=domains,
+                start_date=start_date,
+                end_date=end_date
+            )   
+            base_page_size: base_query.get('o', {}).get("size", 100)
+            
+            all_patents: list[dict[str, Any]] = []
+            page_count = 0
+            cursor_value = None
+
+            while True:
+                page_count += 1
+                
+                query = base_query.copy()
+                pagination_options = query.get('o', {}).copy()
+                
+                if cursor_value is not None:
+                    pagination_options['after'] = cursor_value
+
+                query["o"] = pagination_options
+
+                logger.info(f"Fetching page {page_count} (up to {base_page_size} records)")
+                if cursor_value:
+                    logger.info(f"Using cursor: {cursor_value}")    
+
+                try: 
+                    response: dict[str, Any] = self._make_api_request(query)
+                    if response.get('error', True):
+                        logger.error(f"API error: {response.get('error', 'Unknown error')}")
+                        break
+
+                    page_patents: list[dict[str, Any]] = response.get('patents', [])
+                    if not page_patents:
+                        logger.info("No more patents found, reached end of results.")
+                        break
+
+                    al_patents.extend(page_patents)
+
+                    # log progress
+                    returned_count = response.get('count', len(page_patents))
+                    total_available = response.get('total_hits', 'unknown')
+
+                    logger.info(f"Retrieved  {returned_count} patents from page {page_count}")
+                    logger.info(f"Total patents retrieved so far: {len(all_patents)}")
+                    logger.info(f"Total patents available: {total_available}")
+
+                    # check max results
+                    if max_results and len(all_patents) >= max_results:
+                        all_patents = all_patents[:max_results]
+                        logger.info(f"Reached max results limit: {max_results}")
+                        break
+
+                    # check if last page
+                    if returned_count < base_page_size:
+                        logger.info(f"Retrieved fewer records than page size, this is the last page.")
+                        break
+                        
+                    # set cursor for next page (using last record's patent_id)
+                    last_patent = page_patents[-1]
+                    cursor_value = last_patent.get('patent_id', None)
+
+                
