@@ -373,4 +373,52 @@ class USPTOPatentPuller:
                     last_patent = page_patents[-1]
                     cursor_value = last_patent.get('patent_id', None)
 
+                    if not curser_value:
+                        logger.warning("No patent_id found in last record, cannot continue pagination.")
+                        break
+
+                    # prevent infinite loop
+                    if page_count > 1000:
+                        logger.warning("Reached maximum page count (1000), stopping.")
+                        break
+
+                except Exception as e:
+                    logger.error(f"Error fetching page {page_count}: {e}")
+                    if page_count = 1:
+                        logger.error("Failed to fetch any patents, aborting.")
+                        raise # if first page fails, reraise the error
+                    else: # if later page fail, just break and return what we have
+                        logger.warning(f"Continuing with {len(all_patents)} patents fetched so far.")
+                        break
+
+            logger.info(f"Successfully fetched {len(all_patents)} patents from USPTO.")
+            
+            df = self._standardize_uspto_data(all_patents, companies, domains)
+
+            return df
+
+
+    def _standardize_uspto_data(self, patents: list[dict[str, Any]], 
+                                companies: list[str], 
+                                domains: list[str]) -> pd.DataFrame:
+        """
+        Standardize the raw patent data from USPTO into a DataFrame.
+        """
+        
+        standardized_data: list[dict[str, Any]] = []
+
+        for patent in patents:
+            # extract basic fields
+            standardized_patent: dict[str, Any] = {
+                'publication_number': patent.get('patentNumber', ''),
+                'title': patent.get('patentTitle', ''),
+                'abstract': patent.get('patentAbstract', ''),
+                'publication_date': patent.get('patentIssueDate', ''),
+                'filing_date': patent.get('patentApplicationFilingDate', ''),
+                'country_code': 'US',
+                'kind_code': '', # USPTO doesnt have this
+                'application_number': '', # another API call for this
+
+                # assignee info
                 
+            }
