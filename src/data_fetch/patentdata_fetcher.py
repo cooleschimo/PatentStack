@@ -422,3 +422,7 @@ class USPTOPatentPuller:
                 # assignee info
                 
             }
+
+            efh4fof
+
+            rfo0
