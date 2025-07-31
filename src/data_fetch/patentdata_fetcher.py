@@ -140,7 +140,7 @@ class USPTOPatentPuller:
             return api_key
        
         logger.error("PatentsView API key not found in environment variables.\n")
-        raise ValueError("
+        raise ValueError(
             "\nRequired setup:\n"
             "Create a .env file in your project root with:\n"
             "PATENTSVIEW_API_KEY=your_actual_api_key_here\n"
@@ -241,7 +241,7 @@ class USPTOPatentPuller:
             "o": options
         }
 
-    def make_api_request(self, query: dict[str, Any]) -> 
+    def make_api_request(self, query: dict[str, Any]) -> None:
         """
         Make rate-limited request to PatentsView API.
         """
@@ -384,7 +384,7 @@ class USPTOPatentPuller:
 
                 except Exception as e:
                     logger.error(f"Error fetching page {page_count}: {e}")
-                    if page_count = 1:
+                    if page_count == 1:
                         logger.error("Failed to fetch any patents, aborting.")
                         raise # if first page fails, reraise the error
                     else: # if later page fail, just break and return what we have
@@ -420,9 +420,88 @@ class USPTOPatentPuller:
                 'application_number': '', # another API call for this
 
                 # assignee info
-                
+                'assignees': self._extract_assignees(patent),
+
+                # inventors
+                'inventors': self._extract_inventors(patent),
+
+                # cpc_codes
+                'cpc_codes': self._extract_cpc_codes(patent),
+
+                # citation information
+                'cited_by_count': patent.get('patentCitationCount', 0),
+
+                # Family and priority info (not available from USPTO API)
+                'family_id': '',
+                'priority_date': '',
+
+                # patent url
+                'patent_url': f"https://patents.uspto.gov/patent/{patent.get('patentNumber', '')}",
+
+                 # Extraction metadata
+                'extracted_at': datetime.now().isoformat(),
+                'target_domains': ','.join(domains),
+                'target_companies': ','.join(companies),
+                'data_source': 'USPTO_API'
             }
 
-            efh4fof
+            standardized_data.append(standardized_patent)
 
-            rfo0
+        df = pd.DataFrame(standardized_data)
+
+        for domain in domains:
+            column_name = f'{domain}_relevant'
+            df[column_name] = False
+
+        return df
+    
+    def _extract_assignees(self, patent: dict[str, Any]) -> list[dict[str, str]]:
+        """Extract and normalize assignee information."""
+        assignees: list[dict[str, str]] = []
+        
+        assignee_org: str = patent.get('assigneeOrganization', '')
+        if assignee_org:
+            assignees.append({
+                'name': assignee_org,
+                'harmonized_name': assignee_org,  # USPTO doesn't provide harmonized names
+                'country': 'US'  # Assume US for USPTO patents
+            })
+        
+        return assignees
+    
+    def _extract_inventors(self, patent: dict[str, Any]) -> list[dict[str, str]]:
+        """Extract and normalize inventor information."""
+        inventors: list[dict[str, str]] = []
+        
+        inventor_names: str = patent.get('inventorName', '')
+        if inventor_names:
+            # Split multiple inventors (typically separated by semicolons)
+            names: list[str] = [name.strip() for name in inventor_names.split(';') if name.strip()]
+            
+            for name in names:
+                inventors.append({
+                    'name': name,
+                    'harmonized_name': name,
+                    'country': 'US'  # Assume US for USPTO patents
+                })
+        
+        return inventors
+    
+    def _extract_cpc_codes(self, patent: dict[str, Any]) -> list[dict[str, str]]:
+        """Extract and normalize CPC code information."""
+        cpc_codes: list[dict[str, Any]] = []
+        
+        cpc_classification: str = patent.get('cpcClassificationCode', '')
+        if cpc_classification:
+            # Split multiple CPC codes (typically separated by semicolons)
+            codes: list[str] = [code.strip() for code in cpc_classification.split(';') if code.strip()]
+            
+            for i, code in enumerate(codes):
+                cpc_codes.append({
+                    'code': code,
+                    'is_first': i == 0,  # First code is primary
+                    'tree': ''  # USPTO doesn't provide tree structure
+                })
+        
+        return cpc_codes
+
