@@ -241,7 +241,7 @@ class USPTOPatentPuller:
             "o": options
         }
 
-    def make_api_request(self, query: dict[str, Any]) -> None:
+    def _make_api_request(self, query: dict[str, Any]) -> dict[str, Any]:
         """
         Make rate-limited request to PatentsView API.
         """
@@ -297,105 +297,105 @@ class USPTOPatentPuller:
                 logger.error("No response text available.")
             raise
 
-        def pull_us_patents(self, companies:list[str], domains: list[str],
-                            start_date: str, end_date: str, 
-                            max_results: int | None = None) -> pd.Dataframe:
+    def pull_us_patents(self, companies:list[str], domains: list[str],
+                        start_date: str, end_date: str, 
+                        max_results: int | None = None) -> pd.DataFrame:
 
-            """
-            Pull USPTO US patents for specified companies and domains from 
-            PatentsView API.
-            """
-            logger.info(f"Pulling US patents from USPTO API")
-            logger.info(f"Companies: {companies}")
-            logger.info(f"Domains: {domains}")
-            logger.info(f"Date range: {start_date} to {end_date}")
+        """
+        Pull USPTO US patents for specified companies and domains from 
+        PatentsView API.
+        """
+        logger.info(f"Pulling US patents from USPTO API")
+        logger.info(f"Companies: {companies}")
+        logger.info(f"Domains: {domains}")
+        logger.info(f"Date range: {start_date} to {end_date}")
 
-            base_query: dict[str, Any] = self._build_search_query(
-                companies=companies,
-                domains=domains,
-                start_date=start_date,
-                end_date=end_date
-            )   
-            base_page_size: base_query.get('o', {}).get("size", 100)
+        base_query: dict[str, Any] = self._build_search_query(
+            companies=companies,
+            domains=domains,
+            start_date=start_date,
+            end_date=end_date
+        )   
+        base_page_size = base_query.get('o', {}).get("size", 100)
+        
+        all_patents: list[dict[str, Any]] = []
+        page_count = 0
+        cursor_value = None
+
+        while True:
+            page_count += 1
             
-            all_patents: list[dict[str, Any]] = []
-            page_count = 0
-            cursor_value = None
-
-            while True:
-                page_count += 1
-                
-                query = base_query.copy()
-                pagination_options = query.get('o', {}).copy()
-                
-                if cursor_value is not None:
-                    pagination_options['after'] = cursor_value
-
-                query["o"] = pagination_options
-
-                logger.info(f"Fetching page {page_count} (up to {base_page_size} records)")
-                if cursor_value:
-                    logger.info(f"Using cursor: {cursor_value}")    
-
-                try: 
-                    response: dict[str, Any] = self._make_api_request(query)
-                    if response.get('error', True):
-                        logger.error(f"API error: {response.get('error', 'Unknown error')}")
-                        break
-
-                    page_patents: list[dict[str, Any]] = response.get('patents', [])
-                    if not page_patents:
-                        logger.info("No more patents found, reached end of results.")
-                        break
-
-                    al_patents.extend(page_patents)
-
-                    # log progress
-                    returned_count = response.get('count', len(page_patents))
-                    total_available = response.get('total_hits', 'unknown')
-
-                    logger.info(f"Retrieved  {returned_count} patents from page {page_count}")
-                    logger.info(f"Total patents retrieved so far: {len(all_patents)}")
-                    logger.info(f"Total patents available: {total_available}")
-
-                    # check max results
-                    if max_results and len(all_patents) >= max_results:
-                        all_patents = all_patents[:max_results]
-                        logger.info(f"Reached max results limit: {max_results}")
-                        break
-
-                    # check if last page
-                    if returned_count < base_page_size:
-                        logger.info(f"Retrieved fewer records than page size, this is the last page.")
-                        break
-                        
-                    # set cursor for next page (using last record's patent_id)
-                    last_patent = page_patents[-1]
-                    cursor_value = last_patent.get('patent_id', None)
-
-                    if not curser_value:
-                        logger.warning("No patent_id found in last record, cannot continue pagination.")
-                        break
-
-                    # prevent infinite loop
-                    if page_count > 1000:
-                        logger.warning("Reached maximum page count (1000), stopping.")
-                        break
-
-                except Exception as e:
-                    logger.error(f"Error fetching page {page_count}: {e}")
-                    if page_count == 1:
-                        logger.error("Failed to fetch any patents, aborting.")
-                        raise # if first page fails, reraise the error
-                    else: # if later page fail, just break and return what we have
-                        logger.warning(f"Continuing with {len(all_patents)} patents fetched so far.")
-                        break
-
-            logger.info(f"Successfully fetched {len(all_patents)} patents from USPTO.")
+            query = base_query.copy()
+            pagination_options = query.get('o', {}).copy()
             
-            df = self._standardize_uspto_data(all_patents, companies, domains)
+            if cursor_value is not None:
+                pagination_options['after'] = cursor_value
 
-            return df
+            query["o"] = pagination_options
+
+            logger.info(f"Fetching page {page_count} (up to {base_page_size} records)")
+            if cursor_value:
+                logger.info(f"Using cursor: {cursor_value}")    
+
+            try: 
+                response: dict[str, Any] = self._make_api_request(query)
+                if response.get('error', True):
+                    logger.error(f"API error: {response.get('error', 'Unknown error')}")
+                    break
+
+                page_patents: list[dict[str, Any]] = response.get('patents', [])
+                if not page_patents:
+                    logger.info("No more patents found, reached end of results.")
+                    break
+
+                all_patents.extend(page_patents)
+
+                # log progress
+                returned_count = response.get('count', len(page_patents))
+                total_available = response.get('total_hits', 'unknown')
+
+                logger.info(f"Retrieved  {returned_count} patents from page {page_count}")
+                logger.info(f"Total patents retrieved so far: {len(all_patents)}")
+                logger.info(f"Total patents available: {total_available}")
+
+                # check max results
+                if max_results and len(all_patents) >= max_results:
+                    all_patents = all_patents[:max_results]
+                    logger.info(f"Reached max results limit: {max_results}")
+                    break
+
+                # check if last page
+                if returned_count < base_page_size:
+                    logger.info(f"Retrieved fewer records than page size, this is the last page.")
+                    break
+                    
+                # set cursor for next page (using last record's patent_id)
+                last_patent = page_patents[-1]
+                cursor_value = last_patent.get('patent_id', None)
+
+                if not cursor_value:
+                    logger.warning("No patent_id found in last record, cannot continue pagination.")
+                    break
+
+                # prevent infinite loop
+                if page_count > 1000:
+                    logger.warning("Reached maximum page count (1000), stopping.")
+                    break
+
+            except Exception as e:
+                logger.error(f"Error fetching page {page_count}: {e}")
+                if page_count == 1:
+                    logger.error("Failed to fetch any patents, aborting.")
+                    raise # if first page fails, reraise the error
+                else: # if later page fail, just break and return what we have
+                    logger.warning(f"Continuing with {len(all_patents)} patents fetched so far.")
+                    break
+
+        logger.info(f"Successfully fetched {len(all_patents)} patents from USPTO.")
+        
+        df = self._standardize_uspto_data(all_patents, companies, domains)
+
+        return df
 
 
     def _standardize_uspto_data(self, patents: list[dict[str, Any]], 
@@ -504,4 +504,206 @@ class USPTOPatentPuller:
                 })
         
         return cpc_codes
+    
+###Google Patent Puller ########################################################
+class GooglePatentPuller:
+    """
+    Handles international patent data extraction using BigQuery.
+    """
+    project_id: str
+    cpc_parser: CPCParser
+    client: bigquery.Client
+    global_settings: dict[str, Any]
+    patents_dataset: str
 
+    def __init__(self, project_id: str, cpc_parser: CPCParser) -> None:
+        self.project_id = project_id
+        self.cpc_parser = cpc_parser
+        self.client = bigquery.Client(project=project_id)
+        self.global_settings = cpc_parser.global_settings
+        self.patents_dataset = "patents-public-data.patents.publications"
+
+    def _build_intl_query(self, companies: list[str],
+                          domains: list[str],
+                          start_date: str, end_date: str,
+                          exclude_countries: list[str]) -> str:
+        """
+        Build BigQuery SQL for Google patents.
+        """
+        # get cpc codes #
+        cpc_codes_dict: dict[str, list[str]] = self.cpc_parser.cpc_codes_dict
+        all_cpc_codes: list[str] = []
+        for dom in domains:
+            if dom in cpc_codes_dict:
+                all_cpc_codes.extend(cpc_codes_dict[dom])
+
+        # company conditions #
+        company_conditions: list[str] = []
+        for coy in companies:
+            company_conditions.append(f"UPPER(assignee_organization) LIKE '%{coy.strip().upper()}%'")
+
+        company_filter: str = f"({' OR '.join(company_conditions)})" if company_conditions else "1=1"
+
+        # cpc conditions # 
+        cpc_coonditions: list[str] = []
+        for code in all_cpc_codes:
+            cpc_coonditions.append(f"cpc_code = '{code}'")
+
+        cpc_filter: str = f"EXISTS (SELECT 1 FROM UNNEST(cpc) AS cpc WHERE {' OR '.join(cpc_coonditions)})"
+
+        # exclude countries (US by default) #
+        excluded_countries_str: str = "', '".join(exclude_countries)
+        country_filter: str = f"country_code NOT IN ('{excluded_countries_str}')"
+
+         # date filter #
+        date_filter: str = f"publication_date >= '{start_date}' AND publication_date <= '{end_date}'"
+
+        # combine conditions
+        where_conditions: list[str] = [company_filter, cpc_filter, country_filter, date_filter]
+        where_clause: str = " AND ".join(where_conditions)
+
+        # domains and coy strings
+        domains_str: str = ','.join(domains)
+        companies_str: str = ','.join(companies)
+
+        # build query
+        query: str = f"""
+        SELECT 
+            publication_number,
+            publication_date,
+            filing_date,
+            country_code,
+            kind_code,
+            application_number,
+            title,
+            abstract,
+            
+            -- Assignee information
+            ARRAY(
+                SELECT AS STRUCT 
+                    assignee.name as name,
+                    assignee.harmonized as harmonized_name,
+                    assignee.country_code as country
+                FROM UNNEST(assignee) AS assignee
+            ) as assignees,
+            
+            -- Inventor information
+            ARRAY(
+                SELECT AS STRUCT
+                    inventor.name as name,
+                    inventor.harmonized as harmonized_name,
+                    inventor.country_code as country
+                FROM UNNEST(inventor) AS inventor
+            ) as inventors,
+            
+            -- CPC codes
+            ARRAY(
+                SELECT AS STRUCT
+                    cpc.code as code,
+                    cpc.first as is_first,
+                    cpc.tree as tree
+                FROM UNNEST(cpc) AS cpc
+            ) as cpc_codes,
+            
+            cited_by_count,
+            family_id,
+            priority_date,
+            
+            CONCAT('https://patents.google.com/patent/', publication_number) as patent_url,
+            CURRENT_TIMESTAMP() as extracted_at,
+            '{domains_str}' as target_domains,
+            '{companies_str}' as target_companies
+            
+        FROM `{self.patents_dataset}`
+        WHERE {where_clause}
+        ORDER BY publication_date DESC
+        """
+
+        return query
+    
+    def _execute_query(self, query: str, max_cost_usd: float | None) -> pd.DataFrame:
+        """
+        Execute BigQuery and return results in a df (with optional cost limit)
+        """
+        # estimate cost
+        job_config: bigquery.QueryJobConfig = bigquery.QueryJobConfig(dry_run=True, use_query_cache=False)
+
+        try:
+            job: bigquery.QueryJob = self.client.query(query, job_config=job_config)
+            bytes_processed: int = job.total_bytes_processed
+            gb_processed: float = bytes_processed / (1024**3)
+            tb_processed: float = bytes_processed / (1024**4)
+            estimated_cost: float = max(0, (tb_processed - 1.0)) * 5.0
+            
+            logger.info(f"International query will process ~{gb_processed:.2f} GB")
+            logger.info(f"Estimated cost: ${estimated_cost:.2f}")
+            
+            # Only check cost limit if one is provided
+            if max_cost_usd is not None and estimated_cost > max_cost_usd:
+                raise ValueError(
+                    f"Query cost (${estimated_cost:.2f}) exceeds maximum allowed (${max_cost_usd:.2f}). "
+                    f"To proceed anyway, set max_cost_usd=None or increase the limit."
+                )
+            elif max_cost_usd is None:
+                logger.info("No cost limit set - proceeding with query execution")
+            else:
+                logger.info(f"Cost ${estimated_cost:.2f} is within limit ${max_cost_usd:.2f} - proceeding")
+            
+            # execute query
+            logger.info("Executing BigQuery for international patents...")
+            start_time: float = time.time()
+            
+            job = self.client.query(query)
+            results = job.result()
+            df: pd.DataFrame = results.to_dataframe()
+            
+            execution_time: float = time.time() - start_time
+            logger.info(f"BigQuery query completed in {execution_time:.2f} seconds")
+            logger.info(f"Retrieved {len(df)} international patent records")
+            logger.info(f"Final cost: ${estimated_cost:.2f}")
+            
+            return df
+            
+        except Exception as e:
+            logger.error(f"Error executing BigQuery query: {e}")
+            raise
+
+
+    def pull_international_patents(self, companies: list[str], 
+                                   domains: list[str],
+                                   start_date: str, end_date: str, 
+                                   exclude_countries: list[str] = ['US'],
+                                   max_cost_usd: float | None = None) -> pd.DataFrame:
+        """
+        Pull international patents (non-US) from BigQuery
+        """
+        logger.info(f"Pulling international patents using BigQuery")
+        logger.info(f"Excluding countries: {exclude_countries}")
+        if max_cost_usd is None:
+            logger.info("No cost limit set - run query regardless of estimated cost")
+        else:
+            logger.info(f"Cost limit: ${max_cost_usd}")
+
+        # build query
+        query: str = self._build_intl_query(companies, domains, start_date, end_date, exclude_countries)
+
+        df = self._execute_query(query, max_cost_usd)
+
+        df['data_source'] = 'BigQuery'
+
+        return df
+
+    def _standardize_bigquery_data(self, df: pd.DataFrame, 
+                                  companies: list[str], domains: list[str]) -> pd.DataFrame:
+        """
+        Convert BigQuery data to standardized format (add domain classification columns)
+        """
+        
+        for domain in domains:
+            df[f'{domain}_relevant'] = False
+        
+        return df
+    
+### Hybrid Puller #########################################################
+class HybridPatentPuller:
+        

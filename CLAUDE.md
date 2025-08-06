@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A comprehensive full-stack patent classification system focused on quantum computing and quantum safe communications technologies. This system demonstrates end-to-end data engineering, machine learning, and full-stack development capabilities for technology investment intelligence.
+A comprehensive full-stack patent classification system that can be configured for any technology domain. Currently focused on quantum computing, this system demonstrates end-to-end data engineering, machine learning, and full-stack development capabilities for technology investment intelligence.
 
-**Value Proposition**: "End-to-end patent intelligence system that transforms unstructured patent data into actionable business insights using modern NLP and systematic classification - exactly the kind of data-driven analysis quantitative firms need for technology investment decisions."
+**Value Proposition**: "Universal patent intelligence system that transforms unstructured patent data into actionable business insights using multi-label classification and systematic hierarchical taxonomy - a flexible framework that can be adapted to any technology domain for data-driven investment decisions."
 
 ## Architecture
 
@@ -14,36 +14,39 @@ A comprehensive full-stack patent classification system focused on quantum compu
 
 **Backend**: Python, FastAPI
 **Database**: PostgreSQL (production), DuckDB (analytics)  
-**ML/Data**: PyTorch, HuggingFace Transformers, PatentSBERTa
-**Data Source**: Google Patents BigQuery API
-**Frontend**: Streamlit Dashboard
+**ML/Data**: PyTorch, HuggingFace Transformers, PatentSBERTa (multi-label classification)
+**Data Sources**: USPTO PatentsView API (US patents) + Google Patents BigQuery API (International patents)
+**Frontend**: Streamlit Dashboard (interactive data analysis)
 **Deployment**: Docker, GitHub Actions
 
 ### Project Structure
 ```
 patent-classifier/
 ├── src/
-│   ├── data/
-│   │   ├── bigquery_client.py
-│   │   ├── patent_scraper.py
-│   │   └── data_processor.py
+│   ├── data_fetch/
+│   │   └── patentdata_fetcher.py  # Hybrid USPTO + Google Patents data collection
 │   ├── database/
 │   │   ├── models.py
 │   │   ├── database.py
 │   │   └── migrations/
 │   ├── ml/
 │   │   ├── feature_extraction.py
-│   │   ├── classifier.py
-│   │   ├── dual_domain_classifier.py
+│   │   ├── multilabel_classifier.py
+│   │   ├── patentsberta_classifier.py
 │   │   └── evaluation.py
 │   ├── api/
 │   │   ├── main.py
 │   │   ├── routes/
 │   │   └── schemas/
 │   ├── analytics/
-│   │   └── quantum_analytics.py
-│   └── frontend/
-│       └── quantum_dashboard.py
+│   │   ├── technology_analytics.py
+│   │   └── interactive_analysis.py
+│   ├── frontend/
+│   │   ├── technology_dashboard.py
+│   │   ├── manual_review.py
+│   │   └── data_input_forms.py
+│   └── config/
+│       └── taxonomy_definitions.py
 ├── notebooks/
 │   ├── 01_data_exploration.ipynb
 │   ├── 02_model_development.ipynb
@@ -52,225 +55,145 @@ patent-classifier/
 │   ├── raw/
 │   ├── processed/
 │   └── models/
+├── taxonomies/
+│   ├── quantum_computing.yaml
+│   ├── biotechnology.yaml
+│   └── template.yaml
 └── docs/
 ```
 
-## 5-Layer Technology Taxonomy
+## Hybrid Data Collection Architecture
 
-### Layer 1: Technology Domains
-- **quantum_computing**: Main computational domain
-- **quantum_safe_communications**: Security-focused domain
+### Dual Patent Data Sources
+**US Patents**: USPTO PatentsView API - Direct access to US patent database with rich metadata
+**International Patents**: Google Patents BigQuery API - Global patent coverage with standardized data
 
-### Layer 2-4: Quantum Computing Stack
+### Data Collection Strategy
+User inputs CPC codes for technology area → Hybrid fetcher collects from both APIs → Merge and deduplicate → Store in database
+
+## Multi-Label Hierarchical Classification System
+
+### Configurable Technology Taxonomy Framework
+The system supports any technology domain through configurable hierarchical taxonomies:
+
+**Layer 1**: Technology Domain (e.g., quantum_computing, biotechnology)
+**Layer 2-4**: Technology Stack (hierarchical subcategories)
+**Layer 5**: Keywords & Patterns (for validation)
+
+### Example: Quantum Computing Taxonomy
 ```
 quantum_computing:
 ├── software:
-│   ├── applications (sensing, finance, optimization, drug_discovery, bioinformatics, material_design)
-│   └── algorithms (grover, shor, vqe, qaoa, quantum_circuit, variational_algorithm)
+│   ├── applications (drug_discovery, finance, optimization, sensing)
+│   └── algorithms (grover, shor, vqe, qaoa, quantum_circuit)
 ├── middleware:
-│   ├── hybrid_system_software (cloud platforms, resource management, job scheduling, orchestration)
-│   ├── sdk_language (qiskit, q#, qibo, cirq, pennylane)
-│   ├── compiler (circuit optimization, gate synthesis, transpilation)
-│   └── error_correction (surface codes, stabilizer codes, fault tolerance)
+│   ├── hybrid_system_software (cloud_platforms, orchestration)
+│   ├── sdk_language (qiskit, cirq, pennylane)
+│   ├── compiler (circuit_optimization, gate_synthesis)
+│   └── error_correction (surface_codes, fault_tolerance)
 └── hardware:
-    ├── qpu (superconducting, trapped_ion, neutral_atom, photonic, spin_qubit, topological)
-    ├── control_systems (pulse control, decoherence suppression, feedback loops)
-    └── ancillary_components (cryogenics, lasers, vacuum systems, cabling, power_systems)
+    ├── qpu (superconducting, trapped_ion, photonic)
+    ├── control_systems (pulse_control, feedback_loops)
+    └── ancillary_components (cryogenics, lasers, vacuum_systems)
 ```
-
-### Layer 2-4: Quantum Safe Communications Stack
-```
-quantum_safe_communications:
-├── cryptographic_protocols:
-│   ├── qkd_protocols (BB84, SARG04, E91, continuous_variable_qkd)
-│   ├── post_quantum_crypto (lattice_based, hash_based, code_based, multivariate)
-│   └── key_management (quantum_key_distribution, key_rotation, key_storage)
-├── communication_infrastructure:
-│   ├── fiber_networks (quantum_channels, dark_fiber, metropolitan_networks)
-│   ├── satellite_qkd (space_based_quantum, ground_stations, free_space_optics)
-│   └── quantum_repeaters (quantum_memory, entanglement_swapping, network_nodes)
-└── security_applications:
-    ├── financial_security (banking_systems, trading_platforms, payment_security)
-    ├── government_defense (military_communications, intelligence_networks, national_security)
-    └── enterprise_security (data_centers, cloud_security, corporate_networks)
-```
-
-### Layer 5: Technology Keywords
-Multiple phrasings and variations for each technology enable robust pattern matching and classification.
 
 ## Machine Learning Architecture
 
-### Primary Model: PatentSBERTa + Custom Neural Network
-```
-PatentSBERTa (frozen) → Custom NN Head → Technology Classifications
-Architecture: 768 → 512 → 256 → 128 → [quantum_computing + quantum_safe_comms categories]
-```
+### Multi-Label Classification with PatentSBERTa
+- **Base Model**: PatentSBERTa (768-dimensional embeddings, frozen)
+- **Classification Head**: Multi-layer neural network with sigmoid activations
+- **Output**: Multi-label predictions for all hierarchical levels simultaneously
+- **Key Feature**: Patents can belong to multiple categories (like drug discovery + algorithms)
 
-### Training Strategy
-- **Transfer Learning**: Leverage PatentSBERTa's patent-specific knowledge
-- **Custom Classification Head**: Multi-layer neural network with dropout regularization
-- **Hierarchical Classification**: First predict domain, then technology stack category
-- **Active Learning**: Iterative improvement with manual review feedback
+## System Workflow
 
-### Technology Stack
+1. **Data Collection**: User inputs CPC codes → Hybrid fetcher from USPTO + Google APIs
+2. **Multi-Label Classification**: PatentSBERTa embeddings → Neural network → Multiple simultaneous labels
+3. **Manual Review**: Flag low-confidence predictions → Expert validation → Active learning
+4. **Interactive Analytics**: User-driven dashboard → Custom analysis → Export capabilities
 
-- **Data Processing**: pandas, numpy, duckdb
-- **Machine Learning**: PyTorch, transformers, scikit-learn, PatentSBERTa
-- **Visualization**: plotly, streamlit
-- **Cloud Services**: Google BigQuery (google-cloud-bigquery)
-- **Database**: PostgreSQL (psycopg), SQLAlchemy, DuckDB
-- **API**: FastAPI
+## Technology Stack
+
+### Core Dependencies
+- **Data Processing**: pandas, numpy, duckdb, sqlalchemy
+- **Machine Learning**: PyTorch, transformers, scikit-learn, PatentSBERTa, scikit-multilearn
+- **Patent Data APIs**: requests (USPTO PatentsView), google-cloud-bigquery
+- **Visualization**: plotly, streamlit, matplotlib, seaborn
+- **Database**: PostgreSQL (psycopg), DuckDB
+- **API**: FastAPI, pydantic
 - **Configuration**: PyYAML, python-dotenv
-- **CLI**: click
 
 ## Implementation Phases
 
-### Phase 1: Enhanced Data Collection & Storage
-**Current Focus**: Enhance `src/biqquery_pull.py`
-- Domain-aware patent collection
-- Dual taxonomy keyword matching  
-- Improved error handling and batch processing
-- Data validation and logging system
+### Phase 1: Enhanced Hybrid Data Collection
+- Complete `patentdata_fetcher.py` with robust error handling and batch processing
+- CPC code-based filtering and data validation
 
 ### Phase 2: Database Design
-**Database Layer**: `src/database/database.py`
 - PostgreSQL schema for patents and classifications
-- DuckDB for analytics workloads
-- Migration scripts and data models
-- Indexing for performance optimization
+- DuckDB for analytics workloads and migration scripts
 
-### Phase 3: ML Pipeline - Dual Domain Classification
-**Core ML**: `src/ml/dual_domain_classifier.py`
-- PatentSBERTa + custom neural network heads
-- Hierarchical classification architecture
-- Confidence scoring and review flagging
-- Model versioning and A/B testing
+### Phase 3: Multi-Label ML Pipeline
+- PatentSBERTa + custom multi-label neural network
+- Hierarchical consistency enforcement and confidence scoring
 
-### Phase 4: Manual Review Interface
-**Review System**: Interactive classification review
-- Flag low-confidence predictions
-- Expert review workflow
-- Active learning feedback loop
-- Classification quality metrics
+### Phase 4: Manual Review System
+- Interactive classification review interface
+- Active learning feedback loop and quality metrics
 
-### Phase 5: Analytics Dashboard
-**Frontend**: `src/frontend/quantum_dashboard.py`
-- Cross-domain trend analysis
-- Company intelligence across both domains
-- Technology convergence identification
-- Export capabilities for further analysis
+### Phase 5: Interactive Analytics Dashboard
+- User-driven data exploration and custom query capabilities
+- Dynamic visualizations and export features
 
-## Analytics Capabilities
+## Interactive Analytics Capabilities
 
-### Quantum Computing Analytics
-- "Show IBM's quantum hardware QPU patent distribution by technology type"
-- "Track quantum algorithm development trends over time"
-- "Which companies lead in quantum error correction research?"
-- "Quantum software vs hardware investment patterns"
+### User-Driven Analysis Features
+- Technology trend analysis and company intelligence
+- Cross-technology discovery and geographic analysis
+- Citation network analysis and custom natural language queries
+- Dynamic filtering and interactive visualizations
+- Export options and saved analysis configurations
 
-### Quantum Safe Communications Analytics
-- "Satellite QKD patent filings by country and company"
-- "Post-quantum cryptography vs QKD protocol development"
-- "Financial sector quantum security patent activity"
-- "Government vs enterprise quantum security focus"
-
-### Cross-Domain Analytics
-- "Companies active in both quantum computing and quantum safe communications"
+### Key Analytics Questions
+- "Show patent filing trends for quantum algorithms over the last 5 years"
+- "Which companies are most active in quantum error correction?"
+- "Find patents that span multiple technology areas"
 - "Technology convergence between domains"
-- "Investment flow patterns across quantum technology domains"
-- "Geographic distribution of quantum technology development"
 
-## Key Files to Implement
+## Development Commands
 
-### 1. Enhanced bigquery_pull.py
-- Domain-aware patent collection
-- Dual taxonomy keyword matching
-- Improved error handling and batch processing
+### Data Collection & Processing
+```bash
+python src/data_fetch/patentdata_fetcher.py --cpc-codes "G06N10,H04L9" --start-date 2020-01-01
+python src/database/data_processor.py --source hybrid --validate
+python src/config/setup_taxonomy.py --domain biotechnology
+```
 
-### 2. Dual Domain Classifier (ml/dual_domain_classifier.py)
-- PatentSBERTa + custom neural network heads
-- Hierarchical classification architecture  
-- Confidence scoring and review flagging
+### Model Training & Evaluation
+```bash
+python src/ml/multilabel_classifier.py --train --taxonomy quantum_computing.yaml
+python src/ml/evaluation.py --model multilabel --test-set validation
+```
 
-### 3. Analytics Engine (analytics/quantum_analytics.py)
-- Cross-domain trend analysis
-- Company intelligence across both domains
-- Market opportunity identification
+### Dashboard & Analytics
+```bash
+streamlit run src/frontend/technology_dashboard.py
+streamlit run src/frontend/manual_review.py
+uvicorn src.api.main:app --reload
+```
 
-### 4. Streamlit Dashboard (frontend/quantum_dashboard.py)
-- Interactive visualizations for both domains
-- Company comparison tools
-- Technology trend monitoring
-- Export capabilities for further analysis
-
-## Development Setup
-
-1. **Environment Setup**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-2. **BigQuery Setup**: Ensure Google Cloud credentials are configured for BigQuery access
-
-3. **Database Setup**: Configure PostgreSQL and DuckDB connections
-
-4. **Environment Variables**: Configure database connections and API keys using `.env` file
-
-## Common Commands
-
-### Development Commands
-- **Enhanced data fetcher**: `python src/biqquery_pull.py --domain quantum_computing`
-- **Train dual classifier**: `python src/ml/dual_domain_classifier.py --train`
-- **Run analytics**: `python src/analytics/quantum_analytics.py`
-- **Start dashboard**: `streamlit run src/frontend/quantum_dashboard.py`
-- **API server**: `uvicorn src.api.main:app --reload`
-
-### Data Pipeline Commands
-- **Full pipeline**: `python src/data/pipeline.py --full-refresh`
-- **Incremental update**: `python src/data/pipeline.py --incremental`
-- **Model evaluation**: `python src/ml/evaluation.py --model dual_domain`
-
-### Testing and Quality
-- **Run tests**: `python -m pytest tests/`
-- **Data validation**: `python src/data/validation.py`
-- **Model performance**: `python src/ml/model_monitoring.py`
-
-## Demonstrating Quant-Relevant Skills
-
-### 1. Systematic Classification Framework
-- Multi-domain taxonomy showing ability to handle complex categorization
-- Hierarchical structure demonstrating systematic thinking
-- Industry-aligned categories showing domain expertise
-
-### 2. Advanced Analytics Capabilities
-- Cross-domain analysis identifying technology convergence
-- Company intelligence for competitive positioning
-- Trend detection for investment opportunities
-- Risk assessment through confidence scoring
-
-### 3. Production-Ready Engineering
-- Scalable architecture supporting multiple technology domains
-- Robust data pipeline with monitoring and error handling
-- Modular design enabling easy extension to new domains
-- Performance optimization for real-time analytics
-
-### 4. Data Pipeline Engineering
-- Robust ETL from BigQuery with incremental updates
-- Data quality monitoring and validation
-- Error handling, logging, and retry logic
-- Feature engineering for time-series and NLP
-
-### 5. Model Development & Monitoring
-- Transfer learning with PatentSBERTa
-- Hyperparameter optimization and model versioning
-- Classification accuracy tracking and drift detection
-- Active learning for continuous improvement
+## Data Flow Architecture
+```
+User Input (CPC codes) → patentdata_fetcher.py → 
+USPTO PatentsView API + Google Patents BigQuery → 
+Database (PostgreSQL/DuckDB) → 
+Multi-Label Classifier (PatentSBERTa) → 
+Interactive Dashboard (Streamlit) → 
+Analytics & Export
+```
 
 ## Configuration
 
-- Technology taxonomy defined in classification logic
-- Database connections configured via environment variables
-- Patent classification hierarchy implemented in ML models
-- API configuration and rate limiting settings
+Technology taxonomies defined in YAML files, database connections via environment variables, and configurable classification thresholds and review parameters.
+
+This architecture provides a comprehensive framework for building a flexible, full-stack patent intelligence system that can be adapted to any technology domain while providing powerful multi-label classification and interactive analytics capabilities.
