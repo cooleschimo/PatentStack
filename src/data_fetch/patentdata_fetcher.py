@@ -11,6 +11,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import pandas as pd
 from typing import Any
+from dotenv import load_dotenv
 
 ### Set up #####################################################################
 # Google Cloud BigQuery client setup
@@ -181,17 +182,23 @@ class USPTOPatentPuller:
 
         # 2) CPC conditions
         if all_cpc_codes:
-            cpc_conditions: list[dict[str, Any]] = []
+            # extract subclass IDs
+            subclass_ids: set[str] = set()
             for code in all_cpc_codes:
-                # Use the correct CPC field name from PatentsView
-                cpc_conditions.append({
-                    "cpcs.cpc_subclass_id": code
-                })
-            
-            if len(cpc_conditions) == 1:
-                query_conditions.append(cpc_conditions[0])
-            else:
-                query_conditions.append({"_or": cpc_conditions})
+                if len(code) >= 6:
+                    subclass_ids.add(code[:6])  # "G06N10/20" -> "G06N10"
+
+            if subclass_ids:
+                cpc_conditions: list[dict[str, Any]] = []
+                for subclass in subclass_ids:
+                    cpc_conditions.append({
+                        "cpcs.cpc_subclass_id": subclass  # search for "G06N10", not "G06N10/20"
+                    })
+                
+                if len(cpc_conditions) == 1:
+                    query_conditions.append(cpc_conditions[0])
+                else:
+                    query_conditions.append({"_or": cpc_conditions})
 
         # 3) Date conditions
         if start_date and end_date:
@@ -339,7 +346,7 @@ class USPTOPatentPuller:
 
             try: 
                 response: dict[str, Any] = self._make_api_request(query)
-                if response.get('error', True):
+                if response.get('error', False):
                     logger.error(f"API error: {response.get('error', 'Unknown error')}")
                     break
 
@@ -410,116 +417,86 @@ class USPTOPatentPuller:
         for patent in patents:
             # extract basic fields
             standardized_patent: dict[str, Any] = {
-                'publication_number': patent.get('patentNumber', ''),
-                'title': patent.get('patentTitle', ''),
-                'abstract': patent.get('patentAbstract', ''),
-                'publication_date': patent.get('patentIssueDate', ''),
-                'filing_date': patent.get('patentApplicationFilingDate', ''),
+                'publication_number': patent.get('patent_number', ''),      # CHANGED
+                'title': patent.get('patent_title', ''),                   # CHANGED  
+                'abstract': patent.get('patent_abstract', ''),             # CHANGED
+                'publication_date': patent.get('patent_date', ''),         # CHANGED
+                'filing_date': '',  # Not in basic response
                 'country_code': 'US',
-                'kind_code': '', # USPTO doesnt have this
-                'application_number': '', # another API call for this
+                'kind_code': patent.get('patent_type', ''),
+                'application_number': '',
 
-                # assignee info
+                # FIXED - these now work with the nested structure
                 'assignees': self._extract_assignees(patent),
-
-                # inventors
                 'inventors': self._extract_inventors(patent),
-
-                # cpc_codes
                 'cpc_codes': self._extract_cpc_codes(patent),
 
-                # citation information
-                'cited_by_count': patent.get('patentCitationCount', 0),
-
-                # Family and priority info (not available from USPTO API)
+                'cited_by_count': patent.get('patent_num_times_cited_by_us_patents', 0),
                 'family_id': '',
                 'priority_date': '',
 
-                # patent url
-                'patent_url': f"https://patents.uspto.gov/patent/{patent.get('patentNumber', '')}",
-
-                 # Extraction metadata
+                'patent_url': f"https://patents.uspto.gov/patent/{patent.get('patent_number', '')}",
                 'extracted_at': datetime.now().isoformat(),
                 'target_domains': ','.join(domains),
                 'target_companies': ','.join(companies),
                 'data_source': 'USPTO_API'
             }
-
             standardized_data.append(standardized_patent)
 
         df = pd.DataFrame(standardized_data)
 
+        # Add domain relevance columns
         for domain in domains:
-            column_name = f'{domain}_relevant'
-            df[column_name] = False
+            df[f'{domain}_relevant'] = False
 
         return df
     
-    def _extract_assignees(self, patent: dict[str, Any]) -> list[dict[str, str]]:
-        """Extract and normalize assignee information."""
-        assignees: list[dict[str, str]] = []
-        
-        assignee_org: str = patent.get('assigneeOrganization', '')
-        if assignee_org:
-            assignees.append({
-                'name': assignee_org,
-                'harmonized_name': assignee_org,  # USPTO doesn't provide harmonized names
-                'country': 'US'  # Assume US for USPTO patents
-            })
-        
-        return assignees
-    
-    def _extract_inventors(self, patent: dict[str, Any]) -> list[dict[str, str]]:
-        """Extract and normalize inventor information."""
-        inventors: list[dict[str, str]] = []
-        
-        inventor_names: str = patent.get('inventorName', '')
-        if inventor_names:
-            # Split multiple inventors (typically separated by semicolons)
-            names: list[str] = [name.strip() for name in inventor_names.split(';') if name.strip()]
-            
-            for name in names:
-                inventors.append({
-                    'name': name,
-                    'harmonized_name': name,
-                    'country': 'US'  # Assume US for USPTO patents
-                })
-        
-        return inventors
-    
-    def _extract_cpc_codes(self, patent: dict[str, Any]) -> list[dict[str, str]]:
-        """Extract and normalize CPC code information."""
-        cpc_codes: list[dict[str, Any]] = []
-        
-        cpc_classification: str = patent.get('cpcClassificationCode', '')
-        if cpc_classification:
-            # Split multiple CPC codes (typically separated by semicolons)
-            codes: list[str] = [code.strip() for code in cpc_classification.split(';') if code.strip()]
-            
-            for i, code in enumerate(codes):
-                cpc_codes.append({
-                    'code': code,
-                    'is_first': i == 0,  # First code is primary
-                    'tree': ''  # USPTO doesn't provide tree structure
-                })
-        
-        return cpc_codes
+    def _extract_assignees(self, patent: dict[str, Any]) -> str:  
+        """Extract assignee information from nested structure."""
+        assignees = patent.get('assignees', [])
+        if assignees and len(assignees) > 0:
+            return assignees[0].get('assignee_organization', '')
+        return ''
+
+    def _extract_inventors(self, patent: dict[str, Any]) -> str:  
+        """Extract inventor information from nested structure."""
+        inventors = patent.get('inventors', [])
+        if inventors and len(inventors) > 0:
+            first = inventors[0].get('inventor_name_first', '')
+            last = inventors[0].get('inventor_name_last', '')
+            return f"{first} {last}".strip()
+        return ''
+
+    def _extract_cpc_codes(self, patent: dict[str, Any]) -> str:  
+        """Extract CPC codes from nested structure."""
+        cpcs = patent.get('cpcs', [])
+        if cpcs and len(cpcs) > 0:
+            # Return the most complete CPC code available
+            return (cpcs[0].get('cpc_subgroup_id', '') or 
+                    cpcs[0].get('cpc_group_id', '') or 
+                    cpcs[0].get('cpc_subclass_id', ''))
+        return ''
     
 ###Google Patent Puller ########################################################
 class GooglePatentPuller:
     """
     Handles international patent data extraction using BigQuery.
     """
-    project_id: str
+    project_id: str | None
     cpc_parser: CPCParser
     client: bigquery.Client
     global_settings: dict[str, Any]
     patents_dataset: str
 
-    def __init__(self, project_id: str, cpc_parser: CPCParser) -> None:
-        self.project_id = project_id
+    def __init__(self, cpc_parser: CPCParser) -> None:
+        self.project_id = os.getenv('BIGQUERY_PROJECT_ID')
+        if not self.project_id:
+            raise ValueError(
+                "BigQuery project ID not found in environment variables. "
+                "Please set BIGQUERY_PROJECT_ID environment variable."
+            )
         self.cpc_parser = cpc_parser
-        self.client = bigquery.Client(project=project_id)
+        self.client = bigquery.Client(project=self.project_id)
         self.global_settings = cpc_parser.global_settings
         self.patents_dataset = "patents-public-data.patents.publications"
 
@@ -537,26 +514,34 @@ class GooglePatentPuller:
             if dom in cpc_codes_dict:
                 all_cpc_codes.extend(cpc_codes_dict[dom])
 
+        subclass_ids: set[str] = set()
+        for code in all_cpc_codes:
+            if len(code) >= 6:
+                subclass_ids.add(code[:6])  # "G06N10/20" -> "G06N10"
+
         # company conditions #
         company_conditions: list[str] = []
-        for coy in companies:
-            company_conditions.append(f"UPPER(assignee_organization) LIKE '%{coy.strip().upper()}%'")
-
+        for company in companies:
+            company_conditions.append(
+                f"EXISTS (SELECT 1 FROM UNNEST(assignee) AS a WHERE UPPER(a.name) LIKE '%{company.strip().upper()}%')"
+            )
         company_filter: str = f"({' OR '.join(company_conditions)})" if company_conditions else "1=1"
 
         # cpc conditions # 
-        cpc_coonditions: list[str] = []
-        for code in all_cpc_codes:
-            cpc_coonditions.append(f"cpc_code = '{code}'")
-
-        cpc_filter: str = f"EXISTS (SELECT 1 FROM UNNEST(cpc) AS cpc WHERE {' OR '.join(cpc_coonditions)})"
+        cpc_conditions: list[str] = []
+        for subclass in subclass_ids:
+            cpc_conditions.append(f"SUBSTR(cpc.code, 1, {len(subclass)}) = '{subclass}'")
+    
+        cpc_filter: str = f"EXISTS (SELECT 1 FROM UNNEST(cpc) AS cpc WHERE {' OR '.join(cpc_conditions)})"
 
         # exclude countries (US by default) #
         excluded_countries_str: str = "', '".join(exclude_countries)
         country_filter: str = f"country_code NOT IN ('{excluded_countries_str}')"
 
-         # date filter #
-        date_filter: str = f"publication_date >= '{start_date}' AND publication_date <= '{end_date}'"
+         # date filter: convert YYYY-MM-DD to YYYYMMDD format for BigQuery#
+        start_date_int = start_date.replace('-', '')
+        end_date_int = end_date.replace('-', '')
+        date_filter: str = f"publication_date >= {start_date_int} AND publication_date <= {end_date_int}"
 
         # combine conditions
         where_conditions: list[str] = [company_filter, cpc_filter, country_filter, date_filter]
@@ -612,7 +597,8 @@ class GooglePatentPuller:
             CONCAT('https://patents.google.com/patent/', publication_number) as patent_url,
             CURRENT_TIMESTAMP() as extracted_at,
             '{domains_str}' as target_domains,
-            '{companies_str}' as target_companies
+            '{companies_str}' as target_companies,
+            'BigQuery' as data_source
             
         FROM `{self.patents_dataset}`
         WHERE {where_clause}
@@ -689,7 +675,7 @@ class GooglePatentPuller:
 
         df = self._execute_query(query, max_cost_usd)
 
-        df['data_source'] = 'BigQuery'
+        df = self._standardize_bigquery_data(df, companies, domains)
 
         return df
 
@@ -698,6 +684,7 @@ class GooglePatentPuller:
         """
         Convert BigQuery data to standardized format (add domain classification columns)
         """
+        df['data_source'] = 'BigQuery'
         
         for domain in domains:
             df[f'{domain}_relevant'] = False
@@ -706,4 +693,237 @@ class GooglePatentPuller:
     
 ### Hybrid Puller #########################################################
 class HybridPatentPuller:
+    """
+    Orchestrates both US and international patent data extraction.
+    """
+    def __init__(self, cpc_parser: CPCParser) -> None:
+        self.cpc_parser = cpc_parser
         
+        # USPTO puller 
+        self.uspto_puller = USPTOPatentPuller(cpc_parser)
+        logger.info("USPTO API initialized for US patents (FREE)")
+
+        # BigQuery puller
+        try:
+            self.bigquery_puller = GooglePatentPuller(cpc_parser)
+            logger.info("BigQuery initialized for international patents")
+        except Exception as e:
+            logger.error(f"BigQuery initialization failed: {e}")
+            raise
+
+    def pull_patents_recent_first(self, companies: list[str], 
+                                 start_year: int, end_year: int,
+                                 domains: list[str] | None = None,
+                                 max_international_cost: float = 10.0,
+                                 output_dir: str = "data/raw/") -> dict[str, list[pd.DataFrame]]:
+        """
+        Pull patents starting from most recent year, working backwards.
+        
+        Args:
+            companies: List of company names to search for
+            start_year: Starting year (inclusive)
+            end_year: Ending year (inclusive) 
+            domains: Technology domains to search (uses all if None)
+            max_international_cost: Maximum BigQuery cost in USD
+            output_dir: Directory to save CSV files
+            
+        Returns:
+            Dictionary with 'us_patents' and 'international_patents' DataFrames
+        """
+        
+        # Use all domains if none specified
+        if domains is None:
+            domains = self.cpc_parser.domains
+            logger.info(f"Using all configured domains: {domains}")
+        
+        # Generate years in reverse order (recent first)
+        years: list[int] = list(range(end_year, start_year - 1, -1))
+        logger.info(f"Processing years: {years} (recent to older)")
+        
+        results: dict[str, list[pd.DataFrame]] = {
+            'us_patents': [],
+            'international_patents': []
+        }
+        
+        total_years = len(years)
+
+        for i, year in enumerate(years):
+            year_start: str = f"{year}-01-01"
+            year_end: str = f"{year}-12-31"
+            
+            logger.info(f"Processing year {year} ({i+1}/{total_years})")
+            
+            try:
+                # Process each company separately
+                for company in companies:
+                    logger.info(f"Processing {company} for year {year}")
+                    
+                    # Always pull US patents
+                    try:
+                        us_df = self.uspto_puller.pull_us_patents(
+                            companies=[company],
+                            domains=domains,
+                            start_date=year_start,
+                            end_date=year_end
+                        )
+                        
+                        if not us_df.empty:
+                            us_output_path = f"{output_dir}/US/{company}/{company}_us_patents_{year}.csv"
+                            os.makedirs(os.path.dirname(us_output_path), exist_ok=True)
+                            us_df.to_csv(us_output_path, index=False)
+                            logger.info(f"Saved {len(us_df)} US patents for {company} {year}")
+                            results['us_patents'].append(us_df)
+                        else:
+                            logger.info(f"No US patents found for {company} {year}")
+                    
+                    except Exception as e:
+                        logger.error(f"Failed to get US patents for {company} {year}: {e}")
+                    
+                    # Pull international patents
+                    try:
+                        intl_df = self.bigquery_puller.pull_international_patents(
+                            companies=[company],
+                            domains=domains,
+                            start_date=year_start,
+                            end_date=year_end,
+                            max_cost_usd=max_international_cost
+                        )
+                        
+                        if not intl_df.empty:
+                            intl_output_path = f"{output_dir}/International/{company}/{company}_intl_patents_{year}.csv"
+                            os.makedirs(os.path.dirname(intl_output_path), exist_ok=True)
+                            intl_df.to_csv(intl_output_path, index=False)
+                            logger.info(f"Saved {len(intl_df)} international patents for {company} {year}")
+                            results['international_patents'].append(intl_df)
+                        else:
+                            logger.info(f"No international patents found for {company} {year}")
+                            
+                    except Exception as e:
+                        logger.warning(f"Failed to get international patents for {company} {year}: {e}")
+                        logger.info("Continuing with US patents only...")
+                
+            except Exception as e:
+                logger.error(f"Critical error processing year {year}: {e}")
+                continue
+
+        # Final summary
+        total_us = sum(len(df) for df in results['us_patents'])
+        total_intl = sum(len(df) for df in results['international_patents'])
+        
+        logger.info(f"Patent extraction complete!")
+        logger.info(f"Total US patents: {total_us}")
+        logger.info(f"Total international patents: {total_intl}")
+        
+        if total_intl > 0:
+            estimated_cost = total_intl * 0.01  # Rough estimate
+            logger.info(f"Estimated BigQuery cost: ${estimated_cost:.2f}")
+        
+        logger.info(f"Data saved to: {output_dir}")
+        
+        return results
+    
+### MAIN FUNCTION ##############################################################
+def main() -> None:
+    """Command-line interface for the hybrid patent puller."""
+    load_dotenv('../../.env')
+    
+    parser = argparse.ArgumentParser(
+        description='Patent Data Fetcher - Pull patent data from USPTO and BigQuery',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python patent_fetcher.py --companies "IBM" "Google" --start-year 2022 --end-year 2024 --domains quantum_computing
+  
+  python patent_fetcher.py --companies "IBM" --start-year 2023 --end-year 2023 --bigquery-project-id my-project-123
+        """
+    )
+    
+    # Required arguments
+    parser.add_argument('--companies', nargs='+', required=True,
+                       help='Company names to search for')
+    parser.add_argument('--start-year', type=int, required=True,
+                       help='Start year for patents')
+    parser.add_argument('--end-year', type=int, required=True,
+                       help='End year for patents')
+    
+    # Optional arguments
+    parser.add_argument('--domains', nargs='+',
+                       help='Technology domains (default: all domains in config)')
+    parser.add_argument('--config', default='../../config/cpc_codes.yaml',
+                       help='Path to CPC configuration file')
+    parser.add_argument('--max-international-cost', type=float, default=10.0,
+                       help='Maximum BigQuery cost in USD')
+    parser.add_argument('--output-dir', default='data/raw/',
+                       help='Output directory for CSV files')
+    
+    args = parser.parse_args()
+    
+    # Validation
+    if args.start_year > args.end_year:
+        parser.error("Start year must be <= end year")
+    
+    if args.end_year > datetime.now().year:
+        parser.error(f"End year cannot be in the future (current year: {datetime.now().year})")
+    
+    try:
+        # Load configuration
+        logger.info(f"Loading configuration from: {args.config}")
+        cpc_parser = CPCParser(args.config)
+        
+        # Validate domains
+        if args.domains:
+            invalid_domains = [d for d in args.domains if d not in cpc_parser.domains]
+            if invalid_domains:
+                logger.error(f"Invalid domains: {invalid_domains}")
+                logger.info(f"Available domains: {cpc_parser.domains}")
+                sys.exit(1)
+        
+        # Initialize hybrid puller
+        logger.info("Initializing patent data fetcher...")
+        puller = HybridPatentPuller(cpc_parser=cpc_parser)
+        
+        # Display what we're about to do
+        logger.info(f"Companies: {args.companies}")
+        logger.info(f"Years: {args.start_year} to {args.end_year}")
+        logger.info(f"Domains: {args.domains or cpc_parser.domains}")
+        logger.info(f"BigQuery cost limit: ${args.max_international_cost}")
+        
+        # Pull patents
+        logger.info("Starting patent extraction...")
+        results = puller.pull_patents_recent_first(
+            companies=args.companies,
+            start_year=args.start_year,
+            end_year=args.end_year,
+            domains=args.domains,
+            max_international_cost=args.max_international_cost,
+            output_dir=args.output_dir
+        )
+        
+        # Final summary
+        total_us = sum(len(df) for df in results['us_patents'])
+        total_intl = sum(len(df) for df in results['international_patents'])
+        
+        print(f"Patent extraction completed successfully!")
+        print(f"Results:")
+        print(f"   US patents: {total_us:,}")
+        print(f"   International patents: {total_intl:,}")
+        print(f"   Total patents: {total_us + total_intl:,}")
+        print(f"Data saved to: {args.output_dir}")
+        
+        if total_intl > 0:
+            estimated_cost = total_intl * 0.01
+            print(f"Estimated BigQuery cost: ${estimated_cost:.2f}")
+        
+        print(f"Next steps:")
+        print(f"   1. Check your data: ls {args.output_dir}")
+        print(f"   2. Start ML training with the CSV files")
+        
+    except KeyboardInterrupt:
+        logger.info("Extraction cancelled by user")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
