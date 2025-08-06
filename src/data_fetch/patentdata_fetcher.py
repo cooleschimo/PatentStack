@@ -149,20 +149,18 @@ class USPTOPatentPuller:
         )
         
     def _build_search_query(self, companies: list[str], domains: list[str], 
-                            start_date: str, end_date: str) -> dict[str, Any]:
+                        start_date: str, end_date: str) -> dict[str, Any]:
         """
-        Build PatentsView API search query using format from "documentation link".
+        Build PatentsView API search query using correct field structure.
         """
-
-        # get cpc codes #
+        # Get CPC codes
         cpc_codes_dict: dict[str, list[str]] = self.cpc_parser.cpc_codes_dict
         all_cpc_codes: list[str] = []
         for dom in domains:
             if dom in cpc_codes_dict:
                 all_cpc_codes.extend(cpc_codes_dict[dom])
 
-        # build query #
-        # list of 1) company conditions, 2) cpc conditions 3) date conditions
+        # Build query conditions
         query_conditions: list[dict[str, Any]] = [] 
 
         # 1) Company conditions
@@ -180,25 +178,17 @@ class USPTOPatentPuller:
             else:
                 query_conditions.append({"_or": company_conditions})
 
-        # 2) CPC conditions
+        # 2) CPC conditions - FIXED to use correct field structure
         if all_cpc_codes:
-            # extract subclass IDs
-            subclass_ids: set[str] = set()
+            cpc_conditions: list[dict[str, Any]] = []
             for code in all_cpc_codes:
-                if len(code) >= 6:
-                    subclass_ids.add(code[:6])  # "G06N10/20" -> "G06N10"
-
-            if subclass_ids:
-                cpc_conditions: list[dict[str, Any]] = []
-                for subclass in subclass_ids:
-                    cpc_conditions.append({
-                        "cpcs.cpc_subclass_id": subclass  # search for "G06N10", not "G06N10/20"
-                    })
-                
-                if len(cpc_conditions) == 1:
-                    query_conditions.append(cpc_conditions[0])
-                else:
-                    query_conditions.append({"_or": cpc_conditions})
+                # Use full group code directly from YAML (G06N10/70, H04L9/0852, etc.)
+                cpc_conditions.append({
+                    "cpc_current.cpc_group_id": code
+                })
+            
+            if cpc_conditions:
+                query_conditions.append({"_or": cpc_conditions})
 
         # 3) Date conditions
         if start_date and end_date:
@@ -210,36 +200,32 @@ class USPTOPatentPuller:
         # Combine all conditions
         query = {"_and": query_conditions}
 
-        # fields to return
+        # Fields to return - FIXED field names
         fields: list[str] = [
             "patent_id",
-            "patent_number", 
             "patent_title",
-            "patent_abstract",
-            "patent_date",           
-            "patent_type",           
+            "patent_abstract", 
+            "patent_date",
+            "patent_type",
             
-            "assignees.assignee_organization", 
-            "assignees.assignee_location_city",      
-            "assignees.assignee_location_state",     
-            "assignees.assignee_location_country",
-        
-    
-            "cpcs.cpc_subclass_id",                
-            "cpcs.cpc_group_id",                   
-            "cpcs.cpc_subgroup_id",               
+            "assignees.assignee_organization",
+            "assignees.assignee_city", 
+            "assignees.assignee_state",
+            "assignees.assignee_country",
             
-            "inventors.inventor_name_first",         
-            "inventors.inventor_name_last",         
-    
-            "patent_num_times_cited_by_us_patents",  
-
+            "cpc_current.cpc_subclass_id",
+            "cpc_current.cpc_group_id",
+            
+            "inventors.inventor_name_first",
+            "inventors.inventor_name_last",
+            
+            "patent_num_times_cited_by_us_patents"
         ]
         
-        # options
+        # Options
         options: dict[str, Any] = {
-        "size": 100,
-        "exclude_withdrawn": True  # only granted patents
+            "size": 100,
+            "exclude_withdrawn": True
         }
 
         return {
@@ -252,6 +238,7 @@ class USPTOPatentPuller:
         """
         Make rate-limited request to PatentsView API.
         """
+        logger.info(f"USPTO Query: {json.dumps(query, indent=2)}")
         response = None
         try:
             time.sleep(self.rate_limit_delay)
@@ -406,27 +393,24 @@ class USPTOPatentPuller:
 
 
     def _standardize_uspto_data(self, patents: list[dict[str, Any]], 
-                                companies: list[str], 
-                                domains: list[str]) -> pd.DataFrame:
+                            companies: list[str], 
+                            domains: list[str]) -> pd.DataFrame:
         """
         Standardize the raw patent data from USPTO into a DataFrame.
         """
-        
         standardized_data: list[dict[str, Any]] = []
 
         for patent in patents:
-            # extract basic fields
             standardized_patent: dict[str, Any] = {
-                'publication_number': patent.get('patent_number', ''),      # CHANGED
-                'title': patent.get('patent_title', ''),                   # CHANGED  
-                'abstract': patent.get('patent_abstract', ''),             # CHANGED
-                'publication_date': patent.get('patent_date', ''),         # CHANGED
-                'filing_date': '',  # Not in basic response
+                'publication_number': patent.get('patent_id', ''),  # FIXED field name
+                'title': patent.get('patent_title', ''),
+                'abstract': patent.get('patent_abstract', ''),
+                'publication_date': patent.get('patent_date', ''),
+                'filing_date': '',
                 'country_code': 'US',
                 'kind_code': patent.get('patent_type', ''),
                 'application_number': '',
 
-                # FIXED - these now work with the nested structure
                 'assignees': self._extract_assignees(patent),
                 'inventors': self._extract_inventors(patent),
                 'cpc_codes': self._extract_cpc_codes(patent),
@@ -435,7 +419,7 @@ class USPTOPatentPuller:
                 'family_id': '',
                 'priority_date': '',
 
-                'patent_url': f"https://patents.uspto.gov/patent/{patent.get('patent_number', '')}",
+                'patent_url': f"https://patents.uspto.gov/patent/{patent.get('patent_id', '')}",
                 'extracted_at': datetime.now().isoformat(),
                 'target_domains': ','.join(domains),
                 'target_companies': ','.join(companies),
@@ -444,12 +428,19 @@ class USPTOPatentPuller:
             standardized_data.append(standardized_patent)
 
         df = pd.DataFrame(standardized_data)
-
+        
         # Add domain relevance columns
         for domain in domains:
             df[f'{domain}_relevant'] = False
 
         return df
+
+    def _extract_cpc_codes(self, patent: dict[str, Any]) -> str:
+        """Extract CPC codes from cpc_current structure."""
+        cpc_current = patent.get('cpc_current', [])
+        if cpc_current and len(cpc_current) > 0:
+            return cpc_current[0].get('cpc_subclass_id', '')
+        return ''   
     
     def _extract_assignees(self, patent: dict[str, Any]) -> str:  
         """Extract assignee information from nested structure."""
@@ -465,16 +456,6 @@ class USPTOPatentPuller:
             first = inventors[0].get('inventor_name_first', '')
             last = inventors[0].get('inventor_name_last', '')
             return f"{first} {last}".strip()
-        return ''
-
-    def _extract_cpc_codes(self, patent: dict[str, Any]) -> str:  
-        """Extract CPC codes from nested structure."""
-        cpcs = patent.get('cpcs', [])
-        if cpcs and len(cpcs) > 0:
-            # Return the most complete CPC code available
-            return (cpcs[0].get('cpc_subgroup_id', '') or 
-                    cpcs[0].get('cpc_group_id', '') or 
-                    cpcs[0].get('cpc_subclass_id', ''))
         return ''
     
 ###Google Patent Puller ########################################################
@@ -501,13 +482,13 @@ class GooglePatentPuller:
         self.patents_dataset = "patents-public-data.patents.publications"
 
     def _build_intl_query(self, companies: list[str],
-                          domains: list[str],
-                          start_date: str, end_date: str,
-                          exclude_countries: list[str]) -> str:
+                      domains: list[str],
+                      start_date: str, end_date: str,
+                      exclude_countries: list[str]) -> str:
         """
-        Build BigQuery SQL for Google patents.
+        Build working BigQuery SQL using correct field names.
         """
-        # get cpc codes #
+        # Get CPC codes and extract subclass IDs
         cpc_codes_dict: dict[str, list[str]] = self.cpc_parser.cpc_codes_dict
         all_cpc_codes: list[str] = []
         for dom in domains:
@@ -517,91 +498,70 @@ class GooglePatentPuller:
         subclass_ids: set[str] = set()
         for code in all_cpc_codes:
             if len(code) >= 6:
-                subclass_ids.add(code[:6])  # "G06N10/20" -> "G06N10"
+                subclass_ids.add(code[:6])
 
-        # company conditions #
+        # Build CPC conditions
+        cpc_conditions: list[str] = []
+        for code in all_cpc_codes:
+            # Use exact match for all codes from YAML (G06N10/70, H04L9/0852, etc.)
+            cpc_conditions.append(f"c.code = '{code}'")
+
+        cpc_filter = ' OR '.join(cpc_conditions)
+
+        # Company conditions
         company_conditions: list[str] = []
         for company in companies:
-            company_conditions.append(
-                f"EXISTS (SELECT 1 FROM UNNEST(assignee) AS a WHERE UPPER(a.name) LIKE '%{company.strip().upper()}%')"
-            )
-        company_filter: str = f"({' OR '.join(company_conditions)})" if company_conditions else "1=1"
+            company_conditions.append(f"LOWER(a.name) LIKE '%{company.lower()}%'")
+        
+        company_filter = ' OR '.join(company_conditions)
 
-        # cpc conditions # 
-        cpc_conditions: list[str] = []
-        for subclass in subclass_ids:
-            cpc_conditions.append(f"SUBSTR(cpc.code, 1, {len(subclass)}) = '{subclass}'")
-    
-        cpc_filter: str = f"EXISTS (SELECT 1 FROM UNNEST(cpc) AS cpc WHERE {' OR '.join(cpc_conditions)})"
-
-        # exclude countries (US by default) #
-        excluded_countries_str: str = "', '".join(exclude_countries)
-        country_filter: str = f"country_code NOT IN ('{excluded_countries_str}')"
-
-         # date filter: convert YYYY-MM-DD to YYYYMMDD format for BigQuery#
+        # Date filter
         start_date_int = start_date.replace('-', '')
         end_date_int = end_date.replace('-', '')
-        date_filter: str = f"publication_date >= {start_date_int} AND publication_date <= {end_date_int}"
 
-        # combine conditions
-        where_conditions: list[str] = [company_filter, cpc_filter, country_filter, date_filter]
-        where_clause: str = " AND ".join(where_conditions)
-
-        # domains and coy strings
-        domains_str: str = ','.join(domains)
-        companies_str: str = ','.join(companies)
-
-        # build query
-        query: str = f"""
-        SELECT 
+        # Simplified working query
+        query = f"""
+        SELECT
             publication_number,
             publication_date,
             filing_date,
             country_code,
             kind_code,
             application_number,
-            title,
-            abstract,
             
-            -- Assignee information
+            (SELECT a.name FROM UNNEST(assignee_harmonized) a LIMIT 1) AS assignee,
+            
             ARRAY(
-                SELECT AS STRUCT 
-                    assignee.name as name,
-                    assignee.harmonized as harmonized_name,
-                    assignee.country_code as country
-                FROM UNNEST(assignee) AS assignee
-            ) as assignees,
+            SELECT c.code
+            FROM UNNEST(cpc) AS c
+            WHERE {cpc_filter}
+            ) AS cpc_codes,
             
-            -- Inventor information
-            ARRAY(
-                SELECT AS STRUCT
-                    inventor.name as name,
-                    inventor.harmonized as harmonized_name,
-                    inventor.country_code as country
-                FROM UNNEST(inventor) AS inventor
-            ) as inventors,
-            
-            -- CPC codes
-            ARRAY(
-                SELECT AS STRUCT
-                    cpc.code as code,
-                    cpc.first as is_first,
-                    cpc.tree as tree
-                FROM UNNEST(cpc) AS cpc
-            ) as cpc_codes,
-            
-            cited_by_count,
+            title_localized AS title,
+            abstract_localized AS abstract,
             family_id,
             priority_date,
             
             CONCAT('https://patents.google.com/patent/', publication_number) as patent_url,
             CURRENT_TIMESTAMP() as extracted_at,
-            '{domains_str}' as target_domains,
-            '{companies_str}' as target_companies,
+            '{",".join(domains)}' as target_domains,
+            '{",".join(companies)}' as target_companies,
             'BigQuery' as data_source
             
-        FROM `{self.patents_dataset}`
-        WHERE {where_clause}
+        FROM `patents-public-data.patents.publications`
+        WHERE publication_date >= {start_date_int}
+            AND publication_date <= {end_date_int}
+            AND country_code NOT IN ('{"', '".join(exclude_countries)}')
+            AND EXISTS (
+                SELECT 1
+                FROM UNNEST(assignee_harmonized) a
+                WHERE {company_filter}
+            )
+            AND EXISTS (
+                SELECT 1
+                FROM UNNEST(cpc) c
+                WHERE {cpc_filter}
+            )
         ORDER BY publication_date DESC
         """
 
@@ -611,6 +571,7 @@ class GooglePatentPuller:
         """
         Execute BigQuery and return results in a df (with optional cost limit)
         """
+        logger.info(f"BigQuery SQL: {query}")
         # estimate cost
         job_config: bigquery.QueryJobConfig = bigquery.QueryJobConfig(dry_run=True, use_query_cache=False)
 
@@ -826,7 +787,7 @@ class HybridPatentPuller:
 def main() -> None:
     """Command-line interface for the hybrid patent puller."""
     load_dotenv('../../.env')
-    
+
     parser = argparse.ArgumentParser(
         description='Patent Data Fetcher - Pull patent data from USPTO and BigQuery',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -853,7 +814,7 @@ Examples:
                        help='Path to CPC configuration file')
     parser.add_argument('--max-international-cost', type=float, default=10.0,
                        help='Maximum BigQuery cost in USD')
-    parser.add_argument('--output-dir', default='data/raw/',
+    parser.add_argument('--output-dir', default='../../data/raw/',
                        help='Output directory for CSV files')
     
     args = parser.parse_args()
